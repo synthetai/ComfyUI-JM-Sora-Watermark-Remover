@@ -7,8 +7,9 @@ torch>=2.0.0
 torchvision>=0.15.0
 numpy<2
 
-# Florence-2 for watermark detection
-transformers>=4.30.0
+# Florence-2 for watermark detection (requires transformers 4.38.0+)
+transformers>=4.38.0
+timm>=0.9.0
 
 # Image/Video processing
 opencv-python-headless>=4.8.0
@@ -18,7 +19,7 @@ Pillow>=10.0.0
 # These are the minimal deps needed for LaMA inpainting
 pydantic
 typer
-einops
+einops>=0.7.0
 omegaconf
 easydict
 yacs

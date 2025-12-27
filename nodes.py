@@ -108,20 +108,41 @@ def load_lama_model(device):
         if _patched_metadata:
             importlib_metadata.version = _original_importlib_metadata_version
 
-    # IOPaint may not support MPS, fall back to CPU for LaMA if needed
-    lama_device = device if device in ["cuda", "cpu"] else "cpu"
-    if lama_device != device:
-        logger.info(f"IOPaint/LaMA using {lama_device} (MPS not supported by IOPaint)")
+    # Try to use MPS for LaMA on Apple Silicon, fall back to CPU if unsupported
+    lama_device = device  # Try the same device first (including MPS)
 
     try:
-        return ModelManager(name="lama", device=lama_device)
+        logger.info(f"Attempting to load LaMA model on {lama_device}...")
+        model_manager = ModelManager(name="lama", device=lama_device)
+        logger.info(f"✓ LaMA model loaded successfully on {lama_device}")
+        return model_manager
     except Exception as e:
+        error_msg = str(e)
+
+        # Check if it's a device compatibility error (MPS not supported)
+        if lama_device == "mps" and ("mps" in error_msg.lower() or "NotImplementedError" in error_msg):
+            logger.warning(f"LaMA doesn't support MPS, falling back to CPU")
+            logger.warning(f"(This is a known limitation of IOPaint on Apple Silicon)")
+            try:
+                model_manager = ModelManager(name="lama", device="cpu")
+                logger.info(f"✓ LaMA model loaded on CPU (fallback)")
+                return model_manager
+            except Exception as cpu_e:
+                # Continue to download logic below
+                error_msg = str(cpu_e)
+
         # If model not found, try to download it
-        logger.warning(f"LaMA model not found, attempting to download: {e}")
+        logger.warning(f"LaMA model not found, attempting to download: {error_msg}")
         if download_lama_model():
             try:
-                # Retry loading after download
-                return ModelManager(name="lama", device=lama_device)
+                # Retry loading - try original device first, then CPU
+                try:
+                    return ModelManager(name="lama", device=lama_device)
+                except:
+                    if lama_device != "cpu":
+                        logger.info(f"Falling back to CPU for LaMA")
+                        return ModelManager(name="lama", device="cpu")
+                    raise
             except Exception as retry_e:
                 raise RuntimeError(f"Failed to load LaMA model after download: {retry_e}")
         else:
