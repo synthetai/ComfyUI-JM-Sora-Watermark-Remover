@@ -1,0 +1,33 @@
+# Core AI/ML dependencies
+# Note: These will use ComfyUI's existing versions if available
+# Only install if not present or version too low
+
+# ComfyUI already provides these - we just specify minimum versions
+torch>=2.0.0
+torchvision>=0.15.0
+numpy<2
+
+# Florence-2 for watermark detection
+transformers>=4.30.0
+
+# Image/Video processing
+opencv-python-headless>=4.8.0
+Pillow>=10.0.0
+
+# IOPaint required dependencies (installed manually to avoid conflicts)
+# These are the minimal deps needed for LaMA inpainting
+pydantic
+typer
+einops
+omegaconf
+easydict
+yacs
+
+# Utilities
+loguru
+tqdm
+
+# Note: The following are installed separately:
+# - iopaint (installed with --no-deps to avoid dependency conflicts)
+# - diffusers (provided by ComfyUI, or installed by iopaint dependencies if needed)
+# - peft (provided by ComfyUI, compatibility handled by lazy imports)
