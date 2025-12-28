@@ -109,25 +109,34 @@ def check_dependencies():
                 version = PIL.__version__
             else:
                 mod = __import__(package_name)
-                version = mod.__version__
+                # 某些包（如iopaint）没有__version__属性
+                version = getattr(mod, '__version__', 'installed')
 
             # 版本比较
             if min_version:
-                from packaging import version as pkg_version
-                if pkg_version.parse(version) >= pkg_version.parse(min_version):
-                    print_ok(f"{package}: {version} (>= {min_version})")
+                if version == 'installed':
+                    # 无法获取版本号，但包已安装
+                    print_ok(f"{package}: installed (无法检测版本)")
                 else:
-                    print_error(f"{package}: {version} (需要 >= {min_version})")
-                    issues.append({
-                        'type': 'dependency',
-                        'severity': 'critical',
-                        'package': package,
-                        'current': version,
-                        'required': min_version,
-                        'fix': 'upgrade_package'
-                    })
+                    from packaging import version as pkg_version
+                    if pkg_version.parse(version) >= pkg_version.parse(min_version):
+                        print_ok(f"{package}: {version} (>= {min_version})")
+                    else:
+                        print_error(f"{package}: {version} (需要 >= {min_version})")
+                        issues.append({
+                            'type': 'dependency',
+                            'severity': 'critical',
+                            'package': package,
+                            'current': version,
+                            'required': min_version,
+                            'fix': 'upgrade_package'
+                        })
             else:
-                print_ok(f"{package}: {version}")
+                # 没有版本要求
+                if version == 'installed':
+                    print_ok(f"{package}: installed")
+                else:
+                    print_ok(f"{package}: {version}")
 
         except ImportError:
             print_error(f"{package}: 未安装")
@@ -253,20 +262,39 @@ def check_gpu():
                 # 性能测试
                 try:
                     import time
-                    size = 1000
-                    cpu_tensor = torch.randn(size, size)
-                    mps_tensor = cpu_tensor.to('mps')
+                    import numpy as np
 
-                    start = time.time()
-                    for _ in range(10):
+                    # 使用更大的矩阵和更多迭代次数以获得准确结果
+                    size = 2000
+                    iterations = 20
+
+                    # CPU测试
+                    cpu_tensor = torch.randn(size, size, device='cpu')
+                    # 预热
+                    for _ in range(3):
                         _ = torch.matmul(cpu_tensor, cpu_tensor)
-                    cpu_time = time.time() - start
 
-                    start = time.time()
-                    for _ in range(10):
+                    cpu_times = []
+                    for _ in range(iterations):
+                        start = time.time()
+                        _ = torch.matmul(cpu_tensor, cpu_tensor)
+                        cpu_times.append(time.time() - start)
+                    cpu_time = np.mean(cpu_times)
+
+                    # MPS测试
+                    mps_tensor = torch.randn(size, size, device='mps')
+                    # 预热
+                    for _ in range(3):
                         _ = torch.matmul(mps_tensor, mps_tensor)
                     torch.mps.synchronize()
-                    mps_time = time.time() - start
+
+                    mps_times = []
+                    for _ in range(iterations):
+                        start = time.time()
+                        _ = torch.matmul(mps_tensor, mps_tensor)
+                        torch.mps.synchronize()
+                        mps_times.append(time.time() - start)
+                    mps_time = np.mean(mps_times)
 
                     speedup = cpu_time / mps_time
 
