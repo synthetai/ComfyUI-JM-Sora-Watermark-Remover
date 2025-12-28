@@ -218,16 +218,35 @@ def detect_only(image: MatLike, model, processor, device: str, max_bbox_percent:
     return results
 
 
-def process_image_with_lama(image: MatLike, mask: MatLike, model_manager):
-    """Process image with LaMA inpainting model."""
+def process_image_with_lama(image: MatLike, mask: MatLike, model_manager, quality_mode="balanced"):
+    """Process image with LaMA inpainting model.
+
+    Args:
+        image: Input image
+        mask: Mask indicating regions to inpaint
+        model_manager: LaMA model manager
+        quality_mode: Quality/speed tradeoff
+            - "fast": ldm_steps=30, faster but lower quality
+            - "balanced": ldm_steps=50, good balance (default)
+            - "high": ldm_steps=100, slower but better quality
+    """
     # Lazy import to avoid dependency conflicts
     from iopaint.schema import HDStrategy, LDMSampler, InpaintRequest as Config
 
+    # Quality presets
+    steps_map = {
+        "fast": 30,
+        "balanced": 50,
+        "high": 100,
+    }
+
+    ldm_steps = steps_map.get(quality_mode, 50)
+
     config = Config(
-        ldm_steps=50,
+        ldm_steps=ldm_steps,
         ldm_sampler=LDMSampler.ddim,
         hd_strategy=HDStrategy.CROP,
-        hd_strategy_crop_margin=64,
+        hd_strategy_crop_margin=128,  # Increased from 64 for better context
         hd_strategy_crop_trigger_size=800,
         hd_strategy_resize_limit=1600,
     )
@@ -288,6 +307,9 @@ class SoraWatermarkRemover:
                 "transparent": ("BOOLEAN", {
                     "default": False
                 }),
+                "quality_mode": (["fast", "balanced", "high"], {
+                    "default": "balanced"
+                }),
             }
         }
 
@@ -341,7 +363,7 @@ class SoraWatermarkRemover:
                 logger.error("Please ensure LaMA model is downloaded. Run: python install.py")
                 raise
 
-    def remove_watermark(self, image, detection_prompt, max_bbox_percent, transparent=False):
+    def remove_watermark(self, image, detection_prompt, max_bbox_percent, transparent=False, quality_mode="balanced"):
         """
         Remove watermarks from input image.
 
@@ -350,6 +372,7 @@ class SoraWatermarkRemover:
             detection_prompt: Text prompt for watermark detection
             max_bbox_percent: Maximum bbox size as percentage of image
             transparent: Make watermark regions transparent instead of inpainting
+            quality_mode: LaMA quality mode ("fast", "balanced", "high")
 
         Returns:
             Processed IMAGE tensor
@@ -388,7 +411,8 @@ class SoraWatermarkRemover:
                 lama_result = process_image_with_lama(
                     np.array(pil_image),
                     np.array(mask_image),
-                    self.lama_model
+                    self.lama_model,
+                    quality_mode=quality_mode
                 )
                 result_image = Image.fromarray(cv2.cvtColor(lama_result, cv2.COLOR_BGR2RGB))
 
@@ -465,6 +489,9 @@ class SoraVideoWatermarkRemover:
                 "transparent": ("BOOLEAN", {
                     "default": False
                 }),
+                "quality_mode": (["fast", "balanced", "high"], {
+                    "default": "balanced"
+                }),
             }
         }
 
@@ -519,7 +546,7 @@ class SoraVideoWatermarkRemover:
                 raise
 
     def remove_watermark(self, frames, detection_prompt, max_bbox_percent, fps,
-                        detection_skip=1, fade_in=0.0, fade_out=0.0, transparent=False):
+                        detection_skip=1, fade_in=0.0, fade_out=0.0, transparent=False, quality_mode="balanced"):
         """
         Remove watermarks from video frames using two-pass processing.
 
@@ -532,6 +559,7 @@ class SoraVideoWatermarkRemover:
             fade_in: Extend mask backwards by N seconds for fade-in watermarks
             fade_out: Extend mask forwards by N seconds for fade-out watermarks
             transparent: Make watermark regions transparent instead of inpainting
+            quality_mode: LaMA quality mode ("fast", "balanced", "high")
 
         Returns:
             Processed IMAGE tensor (video frames)
@@ -625,7 +653,8 @@ class SoraVideoWatermarkRemover:
                     lama_result = process_image_with_lama(
                         np.array(pil_image),
                         np.array(mask),
-                        self.lama_model
+                        self.lama_model,
+                        quality_mode=quality_mode
                     )
                     result_image = Image.fromarray(cv2.cvtColor(lama_result, cv2.COLOR_BGR2RGB))
             else:
