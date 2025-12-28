@@ -272,6 +272,91 @@ def make_region_transparent(image: Image.Image, mask: Image.Image):
     return transparent_image
 
 
+def detect_with_enhanced_sensitivity(image: Image.Image, model, processor, device: str,
+                                    max_bbox_percent: float, detection_prompt: str = "watermark"):
+    """
+    Enhanced detection using multiple thresholds to catch faint watermarks.
+
+    This is especially useful for fade-in watermarks at the beginning of videos.
+    """
+    # Try detection with multiple max_bbox_percent thresholds
+    thresholds = [max_bbox_percent, max_bbox_percent * 1.5, max_bbox_percent * 2.0]
+
+    all_bboxes = []
+
+    for threshold in thresholds:
+        bboxes = detect_only(image, model, processor, device, threshold, detection_prompt)
+        all_bboxes.extend(bboxes)
+
+    # Remove duplicates (bboxes that are very similar)
+    if not all_bboxes:
+        return []
+
+    unique_bboxes = []
+    for bbox in all_bboxes:
+        is_duplicate = False
+        for existing in unique_bboxes:
+            # Check if bboxes overlap significantly
+            x1, y1, x2, y2 = bbox
+            ex1, ey1, ex2, ey2 = existing
+
+            # Calculate IoU (Intersection over Union)
+            xi1 = max(x1, ex1)
+            yi1 = max(y1, ey1)
+            xi2 = min(x2, ex2)
+            yi2 = min(y2, ey2)
+
+            if xi1 < xi2 and yi1 < yi2:
+                inter_area = (xi2 - xi1) * (yi2 - yi1)
+                bbox_area = (x2 - x1) * (y2 - y1)
+                existing_area = (ex2 - ex1) * (ey2 - ey1)
+                union_area = bbox_area + existing_area - inter_area
+
+                iou = inter_area / union_area if union_area > 0 else 0
+
+                if iou > 0.5:  # 50% overlap = duplicate
+                    is_duplicate = True
+                    break
+
+        if not is_duplicate:
+            unique_bboxes.append(bbox)
+
+    return unique_bboxes
+
+
+def sharpen_image(image_np: np.ndarray, strength: float = 1.0):
+    """
+    Apply unsharp mask to sharpen image and reduce blur.
+
+    Args:
+        image_np: Image as numpy array (H, W, C)
+        strength: Sharpening strength (0.0 = no sharpening, 2.0 = maximum)
+
+    Returns:
+        Sharpened image
+    """
+    if strength <= 0:
+        return image_np
+
+    # Convert to PIL for easier processing
+    pil_image = Image.fromarray(image_np.astype(np.uint8))
+
+    # Apply unsharp mask
+    from PIL import ImageFilter
+
+    # Gaussian blur
+    blurred = pil_image.filter(ImageFilter.GaussianBlur(radius=2))
+
+    # Unsharp mask: original + strength * (original - blurred)
+    pil_array = np.array(pil_image).astype(np.float32)
+    blur_array = np.array(blurred).astype(np.float32)
+
+    sharpened = pil_array + strength * (pil_array - blur_array)
+    sharpened = np.clip(sharpened, 0, 255).astype(np.uint8)
+
+    return sharpened
+
+
 class SoraWatermarkRemover:
     """ComfyUI node for removing Sora/Sora2 watermarks from images using AI"""
 
@@ -309,6 +394,12 @@ class SoraWatermarkRemover:
                 }),
                 "quality_mode": (["fast", "balanced", "high"], {
                     "default": "balanced"
+                }),
+                "sharpen_strength": ("FLOAT", {
+                    "default": 0.0,
+                    "min": 0.0,
+                    "max": 2.0,
+                    "step": 0.1
                 }),
             }
         }
@@ -363,7 +454,7 @@ class SoraWatermarkRemover:
                 logger.error("Please ensure LaMA model is downloaded. Run: python install.py")
                 raise
 
-    def remove_watermark(self, image, detection_prompt, max_bbox_percent, transparent=False, quality_mode="balanced"):
+    def remove_watermark(self, image, detection_prompt, max_bbox_percent, transparent=False, quality_mode="balanced", sharpen_strength=0.0):
         """
         Remove watermarks from input image.
 
@@ -373,6 +464,7 @@ class SoraWatermarkRemover:
             max_bbox_percent: Maximum bbox size as percentage of image
             transparent: Make watermark regions transparent instead of inpainting
             quality_mode: LaMA quality mode ("fast", "balanced", "high")
+            sharpen_strength: Post-processing sharpening strength (0.0-2.0)
 
         Returns:
             Processed IMAGE tensor
@@ -415,6 +507,12 @@ class SoraWatermarkRemover:
                     quality_mode=quality_mode
                 )
                 result_image = Image.fromarray(cv2.cvtColor(lama_result, cv2.COLOR_BGR2RGB))
+
+                # Apply sharpening if enabled
+                if sharpen_strength > 0:
+                    result_np_temp = np.array(result_image)
+                    sharpened_np = sharpen_image(result_np_temp, sharpen_strength)
+                    result_image = Image.fromarray(sharpened_np)
 
             # Convert back to ComfyUI tensor
             result_np = np.array(result_image).astype(np.float32) / 255.0
@@ -492,6 +590,15 @@ class SoraVideoWatermarkRemover:
                 "quality_mode": (["fast", "balanced", "high"], {
                     "default": "balanced"
                 }),
+                "enhanced_detection": ("BOOLEAN", {
+                    "default": False
+                }),
+                "sharpen_strength": ("FLOAT", {
+                    "default": 0.0,
+                    "min": 0.0,
+                    "max": 2.0,
+                    "step": 0.1
+                }),
             }
         }
 
@@ -546,7 +653,8 @@ class SoraVideoWatermarkRemover:
                 raise
 
     def remove_watermark(self, frames, detection_prompt, max_bbox_percent, fps,
-                        detection_skip=1, fade_in=0.0, fade_out=0.0, transparent=False, quality_mode="balanced"):
+                        detection_skip=1, fade_in=0.0, fade_out=0.0, transparent=False, quality_mode="balanced",
+                        enhanced_detection=False, sharpen_strength=0.0):
         """
         Remove watermarks from video frames using two-pass processing.
 
@@ -560,6 +668,8 @@ class SoraVideoWatermarkRemover:
             fade_out: Extend mask forwards by N seconds for fade-out watermarks
             transparent: Make watermark regions transparent instead of inpainting
             quality_mode: LaMA quality mode ("fast", "balanced", "high")
+            enhanced_detection: Use multi-threshold detection for faint watermarks
+            sharpen_strength: Post-processing sharpening strength (0.0-2.0)
 
         Returns:
             Processed IMAGE tensor (video frames)
@@ -587,15 +697,25 @@ class SoraVideoWatermarkRemover:
             img_np = (img_tensor.cpu().numpy() * 255).astype(np.uint8)
             pil_image = Image.fromarray(img_np)
 
-            # Detect watermarks
-            bboxes = detect_only(
-                pil_image,
-                self.florence_model,
-                self.florence_processor,
-                self.device,
-                max_bbox_percent,
-                detection_prompt
-            )
+            # Detect watermarks - use enhanced detection if enabled
+            if enhanced_detection:
+                bboxes = detect_with_enhanced_sensitivity(
+                    pil_image,
+                    self.florence_model,
+                    self.florence_processor,
+                    self.device,
+                    max_bbox_percent,
+                    detection_prompt
+                )
+            else:
+                bboxes = detect_only(
+                    pil_image,
+                    self.florence_model,
+                    self.florence_processor,
+                    self.device,
+                    max_bbox_percent,
+                    detection_prompt
+                )
 
             if bboxes:
                 detections[frame_idx] = bboxes
@@ -657,6 +777,12 @@ class SoraVideoWatermarkRemover:
                         quality_mode=quality_mode
                     )
                     result_image = Image.fromarray(cv2.cvtColor(lama_result, cv2.COLOR_BGR2RGB))
+
+                    # Apply sharpening if enabled
+                    if sharpen_strength > 0:
+                        result_np_temp = np.array(result_image)
+                        sharpened_np = sharpen_image(result_np_temp, sharpen_strength)
+                        result_image = Image.fromarray(sharpened_np)
             else:
                 # No watermark, keep original
                 result_image = pil_image
