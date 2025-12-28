@@ -7,8 +7,9 @@ torch>=2.0.0
 torchvision>=0.15.0
 numpy<2
 
-# Florence-2 for watermark detection (requires transformers 4.38.0+)
-transformers>=4.38.0
+# Florence-2 for watermark detection (requires transformers 4.38.1+)
+# Note: Use 4.38.1+ not 4.38.0, as 4.38.0 doesn't include Florence2
+transformers>=4.38.1
 timm>=0.9.0
 
 # Image/Video processing

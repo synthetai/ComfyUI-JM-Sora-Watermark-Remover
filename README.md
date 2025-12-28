@@ -2,6 +2,25 @@
 
 一个用于移除Sora和Sora2视频生成模型水印的ComfyUI自定义节点。
 
+## 📚 文档导航
+
+> 📖 **[完整文档索引](INDEX.md)** - 查看所有文档和工具
+
+### 核心文档
+- 🚀 **[快速开始指南](QUICK_START.md)** ⭐ 新手必读，常见问题快速解决
+- 🔧 **[故障排查指南](TROUBLESHOOTING.md)** - 详细的问题诊断和解决方案
+- 🛠️ **[诊断工具说明](TOOLS_README.md)** - 所有诊断工具的详细用法
+- 💻 **[开发文档](CLAUDE.md)** - 项目架构和开发指南
+
+## 🛠️ 诊断工具
+
+遇到问题？运行诊断脚本自动检测：
+```bash
+python diagnose.py
+```
+
+所有可用工具：[TOOLS_README.md](TOOLS_README.md) | [DIAGNOSTIC_TOOLS.md](DIAGNOSTIC_TOOLS.md)
+
 ## 功能特性
 
 - **AI智能检测** - 使用Florence-2模型进行水印智能检测
@@ -273,12 +292,22 @@ JM-Nodes → Video → Sora → Sora Watermark Remover (Video)
 
 ## 常见问题
 
+> 💡 **遇到问题？**
+> 1. 运行诊断脚本：`python diagnose.py`
+> 2. 查看 **[快速开始指南](QUICK_START.md)**
+> 3. 查看 **[详细故障排查](TROUBLESHOOTING.md)**
+
 ### Q: ComfyUI启动时报错导入失败？
 A: 请运行安装脚本：
 
 ```bash
 cd ComfyUI-JM-Sora-Watermark-Remover
 python install.py
+```
+
+如果还有问题，运行诊断：
+```bash
+python diagnose.py
 ```
 
 install.py会：

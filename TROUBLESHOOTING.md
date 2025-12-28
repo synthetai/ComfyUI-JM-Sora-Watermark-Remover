@@ -1,5 +1,23 @@
 # 水印移除故障排查指南
 
+> 💡 **快速诊断**：运行 `python diagnose.py` 自动检测所有问题！
+>
+> 📚 **查看工具说明**：[TOOLS_README.md](TOOLS_README.md) - 所有诊断工具的详细说明
+
+## 🔍 诊断工具快速参考
+
+| 问题类型 | 使用工具 | 命令 |
+|---------|---------|------|
+| 任何问题 | 综合诊断 | `python diagnose.py` |
+| 依赖错误 | 自动修复 | `bash fix_dependencies.sh` |
+| 水印未移除 | 检测测试 | `python debug_detection.py video.mp4` |
+| Mac运行慢 | 性能检查 | `python check_performance.py` |
+| 验证安装 | 快速测试 | `python test_installation.py` |
+
+详细工具说明请查看：[TOOLS_README.md](TOOLS_README.md)
+
+---
+
 ## 问题：视频处理后水印没有被移除
 
 ### 可能的原因和解决方案

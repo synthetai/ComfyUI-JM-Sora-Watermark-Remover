@@ -25,7 +25,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - 使用开放词汇检测 (`OPEN_VOCABULARY_DETECTION`) 任务
 - 支持自定义检测提示词 (detection_prompt)
 - 自动从HuggingFace下载到 `~/.cache/huggingface/hub/`
-- **重要**: 需要 transformers>=4.38.0, timm>=0.9.0, einops>=0.7.0
+- **重要**: 需要 transformers>=4.38.1 (注意不是4.38.0), timm>=0.9.0, einops>=0.7.0
+- **推荐**: transformers==4.57.3 或更高版本
 
 **LaMA (图像修复)**:
 - 模型: `big-lama.pt` (~196MB)
@@ -187,11 +188,12 @@ python install.py
 ### 模型加载失败
 
 **Florence-2导入失败** (`cannot import name 'Florence2ForConditionalGeneration'`):
-- 原因: transformers版本过低
-- 解决: 升级transformers到4.38.0+
+- 原因: transformers版本过低或恰好是4.38.0
+- 解决: 升级transformers到4.38.1+（推荐4.57.3）
   ```bash
-  pip install --upgrade transformers>=4.38.0 timm>=0.9.0
+  pip install --upgrade transformers==4.57.3 timm>=0.9.0
   ```
+- 注意: transformers 4.38.0不包含Florence2，需要4.38.1或更高版本
 
 **Florence-2下载失败**:
 - 检查网络连接和HuggingFace访问
