@@ -10,9 +10,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### 1. 节点系统
 
-**两个主要节点类**:
-- `SoraWatermarkRemover` (nodes.py:235-383): 图像水印移除节点
-- `SoraVideoWatermarkRemover` (nodes.py:385-626): 视频水印移除节点
+**主要节点类**:
+- `SoraVideoWatermarkRemover` (nodes.py:365-651): 视频水印移除节点
 
 **节点注册** (__init__.py):
 - 通过 `NODE_CLASS_MAPPINGS` 和 `NODE_DISPLAY_NAME_MAPPINGS` 注册节点
@@ -36,19 +35,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### 3. 视频处理算法 - 两遍处理
 
-**关键创新** (nodes.py:500-626):
+**关键创新** (nodes.py:498-651):
 
-**Pass 1 - 稀疏检测** (nodes.py:531-557):
+**Pass 1 - 稀疏检测** (nodes.py:533-570):
 - 每 `detection_skip` 帧进行一次检测
 - 使用 `detect_only()` 函数只返回bbox,不创建mask
 - 结果存储在 `detections` 字典中
 
-**时间线扩展** (nodes.py:559-577):
+**时间线扩展** (nodes.py:572-590):
 - 根据 `fade_in`/`fade_out` 参数扩展检测时间范围
 - 将检测结果映射到需要修复的帧 (`frame_masks`)
 - 处理渐入渐出水印
 
-**Pass 2 - 批量修复** (nodes.py:579-626):
+**Pass 2 - 批量修复** (nodes.py:592-651):
 - 只对 `frame_masks` 中的帧应用LaMA修复
 - 无水印帧直接保留原始内容
 - 显著提升处理效率
@@ -59,7 +58,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **延迟导入**: transformers和iopaint只在使用时导入,避免启动冲突 (nodes.py:12-16)
 - **Monkey-patch**: 绕过peft版本检查以兼容ComfyUI旧版本 (nodes.py:66-109)
 - **条件安装**: iopaint使用 `--no-deps` 安装避免依赖冲突 (install.py:78-87)
-- **设备兼容**: 自动检测CUDA/MPS/CPU (nodes.py:242-248, 395-401)
+- **设备兼容**: 自动检测CUDA/MPS/CPU (nodes.py:371-381)
 
 ## 常用命令
 
@@ -99,7 +98,7 @@ python install.py
 
 ### 设备选择逻辑
 
-代码自动选择最优设备 (nodes.py:242-248):
+代码自动选择最优设备 (nodes.py:371-381):
 1. CUDA (如果可用) - 最优
 2. MPS (Apple Silicon) - 次优
 3. CPU - 备选
@@ -108,13 +107,13 @@ python install.py
 
 ### 水印检测流程
 
-1. 使用Florence-2进行开放词汇检测 (nodes.py:131-150)
-2. 过滤大于 `max_bbox_percent` 的检测框,防止误检 (nodes.py:164-170)
-3. 创建mask图像用于修复 (nodes.py:153-172)
+1. 使用Florence-2进行开放词汇检测 (nodes.py:152-171)
+2. 过滤大于 `max_bbox_percent` 的检测框,防止误检 (nodes.py:184-196)
+3. 创建mask图像用于修复 (nodes.py:174-198)
 
 ### ComfyUI张量格式
 
-**输入/输出张量格式** (nodes.py:328-335):
+**输入/输出张量格式**:
 - 格式: `(B, H, W, C)` - 批次、高度、宽度、通道
 - 数值范围: `[0, 1]` (float32)
 - 需要转换到PIL/NumPy格式 (0-255 uint8) 进行处理
@@ -122,19 +121,19 @@ python install.py
 ### 透明模式 vs LaMA修复
 
 **透明模式** (transparent=True):
-- 将水印区域设为透明 (nodes.py:221-232)
+- 将水印区域设为透明 (nodes.py:266-277)
 - 处理速度快~10倍
 - 适合快速预览
 
 **LaMA修复** (transparent=False):
-- 使用AI修复水印区域 (nodes.py:200-218)
+- 使用AI修复水印区域 (nodes.py:226-264)
 - 效果自然
 - 处理较慢但质量高
 
 ### Bbox Padding (边界扩展)
 
 **bbox_padding参数** (默认: 10像素):
-- 在检测到的bbox四周扩展N个像素 (nodes.py:189-193, 772-776)
+- 在检测到的bbox四周扩展N个像素 (nodes.py:189-193, 608-613)
 - 确保mask完全覆盖水印,防止边缘残留
 - **适用场景**:
   - 水印检测bbox太小,没有完全覆盖水印
@@ -154,9 +153,9 @@ python install.py
 ### 修改视频处理算法
 
 **关键函数**:
-- `detect_only()` (nodes.py:175-197): 只检测不修复
-- `process_image_with_lama()` (nodes.py:200-218): LaMA修复
-- `remove_watermark()` in `SoraVideoWatermarkRemover` (nodes.py:500-626): 两遍处理主流程
+- `detect_only()` (nodes.py:201-223): 只检测不修复
+- `process_image_with_lama()` (nodes.py:226-264): LaMA修复
+- `remove_watermark()` in `SoraVideoWatermarkRemover` (nodes.py:498-651): 两遍处理主流程
 
 ### 添加新的ComfyUI节点
 

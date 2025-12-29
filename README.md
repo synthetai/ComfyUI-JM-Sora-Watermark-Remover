@@ -104,20 +104,15 @@ curl -L -o ~/.cache/torch/hub/checkpoints/big-lama.pt \
 
 ### 节点类型
 
-本插件提供两个节点：
+本插件提供一个节点：
 
-#### 1. Sora Watermark Remover (Image)
-用于处理单张图像或图像批次
-
-#### 2. Sora Watermark Remover (Video)
+#### Sora Watermark Remover (Video)
 用于处理视频帧序列，支持稀疏检测和时间扩展
 
 ### 节点参数说明
 
-#### 图像节点参数（Image）
-
 ##### 必需参数
-- **image**: 输入图像（ComfyUI的IMAGE类型）
+- **frames**: 视频帧序列（ComfyUI的IMAGE批次，批次维度表示帧数）
 - **detection_prompt**: 检测提示词
   - 默认值: `"watermark"`
   - 示例:
@@ -129,20 +124,6 @@ curl -L -o ~/.cache/torch/hub/checkpoints/big-lama.pt \
   - 默认值: `10.0`
   - 范围: `0.0 - 100.0`
   - 说明: 超过此百分比的检测框将被忽略，防止误检测大面积区域
-
-##### 可选参数
-- **transparent**: 透明模式
-  - 默认值: `False`
-  - 说明:
-    - `False`: 使用LaMA模型修复水印区域
-    - `True`: 将水印区域设为透明（用白色填充）
-
-#### 视频节点参数（Video）
-
-##### 必需参数
-- **frames**: 视频帧序列（ComfyUI的IMAGE批次，批次维度表示帧数）
-- **detection_prompt**: 检测提示词（同图像节点）
-- **max_bbox_percent**: 最大检测框百分比（同图像节点）
 - **fps**: 视频帧率
   - 默认值: `30.0`
   - 范围: `1.0 - 120.0`
@@ -167,16 +148,15 @@ curl -L -o ~/.cache/torch/hub/checkpoints/big-lama.pt \
   - 说明: 向后扩展mask的秒数，用于处理渐出水印
   - 推荐: 如果水印有渐出效果，设置为 `0.5 - 1.0`
 
-- **transparent**: 透明模式（同图像节点）
+- **transparent**: 透明模式
+  - 默认值: `False`
+  - 说明:
+    - `False`: 使用LaMA模型修复水印区域
+    - `True`: 将水印区域设为透明（用白色填充）
 
 ### 工作流示例
 
-#### 图像处理工作流
-```
-Load Image → Sora Watermark Remover (Image) → Save Image
-```
-
-#### 视频处理工作流
+视频处理工作流：
 ```
 Load Video (VHS) → Sora Watermark Remover (Video) → Save Video (VHS)
 ```
@@ -190,7 +170,6 @@ Video Loader → Sora Watermark Remover (Video) → Video Combiner
 
 在ComfyUI节点菜单中的位置：
 ```
-JM-Nodes → Video → Sora → Sora Watermark Remover (Image)
 JM-Nodes → Video → Sora → Sora Watermark Remover (Video)
 ```
 
@@ -386,7 +365,6 @@ MIT License
 
 ### v1.0.0
 - 初始版本发布
-- 支持Sora/Sora2图像水印移除
 - 支持Sora/Sora2视频水印移除
 - 集成Florence-2和LaMA模型
 - 支持自定义检测提示词
