@@ -171,7 +171,7 @@ def identify(task_prompt: TaskType, image: MatLike, text_input: str, model, proc
     )
 
 
-def get_watermark_mask(image: MatLike, model, processor, device: str, max_bbox_percent: float, detection_prompt: str = "watermark"):
+def get_watermark_mask(image: MatLike, model, processor, device: str, max_bbox_percent: float, detection_prompt: str = "watermark", bbox_padding: int = 10):
     """Detect watermarks and create a mask for inpainting."""
     task_prompt = TaskType.OPEN_VOCAB_DETECTION
     parsed_answer = identify(task_prompt, image, detection_prompt, model, processor, device)
@@ -186,6 +186,11 @@ def get_watermark_mask(image: MatLike, model, processor, device: str, max_bbox_p
             x1, y1, x2, y2 = map(int, bbox)
             bbox_area = (x2 - x1) * (y2 - y1)
             if (bbox_area / image_area) * 100 <= max_bbox_percent:
+                # Apply padding to ensure full watermark coverage
+                x1 = max(0, x1 - bbox_padding)
+                y1 = max(0, y1 - bbox_padding)
+                x2 = min(image.width, x2 + bbox_padding)
+                y2 = min(image.height, y2 + bbox_padding)
                 draw.rectangle([x1, y1, x2, y2], fill=255)
             else:
                 logger.warning(f"Skipping large bounding box: {bbox} covering {bbox_area / image_area:.2%} of the image")
@@ -401,6 +406,12 @@ class SoraWatermarkRemover:
                     "max": 2.0,
                     "step": 0.1
                 }),
+                "bbox_padding": ("INT", {
+                    "default": 10,
+                    "min": 0,
+                    "max": 100,
+                    "step": 1
+                }),
             }
         }
 
@@ -454,7 +465,7 @@ class SoraWatermarkRemover:
                 logger.error("Please ensure LaMA model is downloaded. Run: python install.py")
                 raise
 
-    def remove_watermark(self, image, detection_prompt, max_bbox_percent, transparent=False, quality_mode="balanced", sharpen_strength=0.0):
+    def remove_watermark(self, image, detection_prompt, max_bbox_percent, transparent=False, quality_mode="balanced", sharpen_strength=0.0, bbox_padding=10):
         """
         Remove watermarks from input image.
 
@@ -465,6 +476,7 @@ class SoraWatermarkRemover:
             transparent: Make watermark regions transparent instead of inpainting
             quality_mode: LaMA quality mode ("fast", "balanced", "high")
             sharpen_strength: Post-processing sharpening strength (0.0-2.0)
+            bbox_padding: Expand bbox by N pixels on all sides to ensure full watermark coverage
 
         Returns:
             Processed IMAGE tensor
@@ -489,7 +501,8 @@ class SoraWatermarkRemover:
                 self.florence_processor,
                 self.device,
                 max_bbox_percent,
-                detection_prompt
+                detection_prompt,
+                bbox_padding
             )
 
             # Process image
@@ -599,6 +612,12 @@ class SoraVideoWatermarkRemover:
                     "max": 2.0,
                     "step": 0.1
                 }),
+                "bbox_padding": ("INT", {
+                    "default": 10,
+                    "min": 0,
+                    "max": 100,
+                    "step": 1
+                }),
             }
         }
 
@@ -654,7 +673,7 @@ class SoraVideoWatermarkRemover:
 
     def remove_watermark(self, frames, detection_prompt, max_bbox_percent, fps,
                         detection_skip=1, fade_in=0.0, fade_out=0.0, transparent=False, quality_mode="balanced",
-                        enhanced_detection=False, sharpen_strength=0.0):
+                        enhanced_detection=False, sharpen_strength=0.0, bbox_padding=10):
         """
         Remove watermarks from video frames using two-pass processing.
 
@@ -670,6 +689,7 @@ class SoraVideoWatermarkRemover:
             quality_mode: LaMA quality mode ("fast", "balanced", "high")
             enhanced_detection: Use multi-threshold detection for faint watermarks
             sharpen_strength: Post-processing sharpening strength (0.0-2.0)
+            bbox_padding: Expand bbox by N pixels on all sides to ensure full watermark coverage
 
         Returns:
             Processed IMAGE tensor (video frames)
@@ -761,6 +781,11 @@ class SoraVideoWatermarkRemover:
                 draw = ImageDraw.Draw(mask)
                 for bbox in frame_masks[frame_idx]:
                     x1, y1, x2, y2 = bbox
+                    # Apply padding to ensure full watermark coverage
+                    x1 = max(0, x1 - bbox_padding)
+                    y1 = max(0, y1 - bbox_padding)
+                    x2 = min(pil_image.width, x2 + bbox_padding)
+                    y2 = min(pil_image.height, y2 + bbox_padding)
                     draw.rectangle([x1, y1, x2, y2], fill=255)
 
                 # Apply inpainting or transparency
